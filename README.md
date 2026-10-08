@@ -160,7 +160,7 @@ All endpoints accept the dashboard filters as query parameters, e.g. `/api/attri
 docker compose up --build
 ```
 
-Then open http://localhost:3000. For the full walkthrough – local development, environment variables, production deployment (VPS with HTTPS, or Render + Vercel) and troubleshooting – see the **[Setup & Deployment Guide](docs/SETUP.md)**.
+Then open http://localhost:3000.
 
 ## Project structure
 
