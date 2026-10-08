@@ -1,0 +1,46 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-slate-50 text-slate-800 antialiased;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+html { scroll-behavior: smooth; }
+
+/* ---------- Dark theme: a soft slate-navy, not near-black ---------- */
+:root.dark {
+  color-scheme: dark;
+  --white: 36 48 68;          /* cards / inputs */
+  --slate-50: 27 36 51;       /* page background */
+  --slate-100: 44 58 80;
+  --slate-200: 58 74 99;      /* borders */
+  --slate-300: 75 93 120;
+  --slate-400: 139 155 180;
+  --slate-500: 154 168 191;
+  --slate-600: 180 192 211;
+  --slate-700: 203 213 227;
+  --slate-800: 226 232 240;   /* main text */
+  --slate-900: 241 245 249;
+
+  --rose-50: 77 30 46;   --rose-100: 94 36 56;   --rose-200: 127 45 68;
+  --rose-600: 251 113 133; --rose-700: 253 164 175; --rose-800: 254 205 211; --rose-900: 255 228 230;
+  --emerald-100: 20 83 62; --emerald-600: 52 211 153; --emerald-700: 110 231 183;
+  --indigo-50: 42 47 92; --indigo-100: 55 61 122; --indigo-600: 129 140 248; --indigo-700: 165 180 252; --indigo-900: 199 210 254;
+  --amber-50: 74 58 23; --amber-600: 251 191 36; --amber-800: 253 230 138;
+}
+
+/* ---------- Print / PDF export ---------- */
+@page { size: A4; margin: 12mm; }
+
+@media print {
+  html, body { background: #fff !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/* Applied by the "Export PDF" button just before window.print():
+   lays the page out at A4 content width so charts are measured at the size they print. */
+html.printing main { max-width: 700px !important; }
+html.printing section .grid { grid-template-columns: minmax(0, 1fr) !important; }
+html.printing section .grid > * { grid-column: auto !important; }
+html.printing section .print-keep-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }

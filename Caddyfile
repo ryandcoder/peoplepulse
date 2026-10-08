@@ -1,0 +1,5 @@
+# Automatic HTTPS (Let's Encrypt) for the domain set in .env (DOMAIN=dashboard.example.com)
+{$DOMAIN} {
+	encode gzip
+	reverse_proxy frontend:80
+}
