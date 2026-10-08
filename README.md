@@ -1,475 +1,200 @@
 # PeoplePulse – Employee Attrition Analytics Dashboard
 
-PeoplePulse loads the IBM HR Analytics dataset into PostgreSQL, cleans and validates it with Pandas, and serves the
-analysis through a FastAPI backend to a React dashboard.
-Flow: **Data → Cleaning → SQL → Analysis → Visualization → Insights.**
+**PeoplePulse** is a full-stack HR analytics dashboard that explores *who leaves a company and what is associated with it*.
+It takes a raw employee dataset through **data cleaning → SQL → statistical analysis → visualization → generated insights**
+and presents the results in an interactive, filterable dashboard with dark mode and PDF export.
+
+It is built as a **data analyst portfolio project**: the emphasis is on correct analysis and honest interpretation, not on machine learning.
+
+**Live demo:** https://peoplepulse-henna.vercel.app *(the API runs on a free tier and may take a moment to wake up)*
+
+---
+
+## Business problem
+
+Employee attrition is expensive: recruiting, onboarding and lost knowledge all add up, and unusually high turnover in a team can point to
+workload, career-development or management issues. HR and management need to know:
+
+- how many people are leaving, and where attrition is concentrated
+- which working conditions, pay and career patterns are *associated* with leaving
+- which employee groups have elevated attrition
+- what HR could investigate to improve retention
+
+## Dataset and credits
+
+This project uses the **IBM HR Analytics Employee Attrition & Performance** dataset (≈1,470 employees, 35 columns).
+
+> **Data source:** Pavan Subhash, *IBM HR Analytics Employee Attrition & Performance*, published on [Kaggle](https://www.kaggle.com/datasets/pavansubhasht/ibm-hr-analytics-attrition-dataset).
+> **Created by:** IBM data scientists, as a fictional dataset for analytics practice.
+
+- The data is **fictional**. It does not describe a real IBM workforce, and no conclusion here should be read as a statement about IBM or any real company.
+- Full credit for the dataset goes to its creators and to the Kaggle provider above. Please refer to the licence and terms shown on the Kaggle dataset page if you reuse or redistribute it.
+- This project is an independent work and is **not affiliated with or endorsed by IBM, Kaggle or the dataset provider**.
+
+## What the dashboard answers
+
+| Area | Questions |
+|---|---|
+| **Overall** | Attrition rate, employees who left / remain, departments and job roles with the highest attrition |
+| **Compensation** | Income of leavers vs stayers, job level, income bands |
+| **Work conditions** | Overtime, work-life balance, job satisfaction, environment satisfaction, business travel |
+| **Career development** | Tenure, years since last promotion, years in role and with manager, total work history |
+| **Employee characteristics** | Age, distance from home, gender, education |
+| **Relationships** | Correlation of numeric variables with attrition |
+| **Action** | Generated key findings, HR recommendations and high-attrition employee segments |
+
+## Features
+
+- **8 KPI cards** (employees, left, remaining, attrition rate, average income, tenure, satisfaction, age) – all calculated from the database
+- **20+ charts**: donut, rate bars with employee counts, income distribution, career comparison, correlation chart
+- **10 dashboard filters** (department, role, gender, overtime, travel, education, satisfaction, work-life balance, age group, tenure group) that update every KPI, chart and insight
+- **Generated insights and recommendations** – computed from the data (and the active filters), never hard-coded
+- **Employee segmentation** – two-factor groups with elevated attrition (minimum 20 employees)
+- **Searchable, sortable, paginated employee table**
+- **Data-quality report** – records, columns, missing values, duplicates, invalid values and every cleaning step
+- **Dark theme** (soft slate-navy) and **PDF export** of the current view
+- **Dockerised** – one command to run locally, plus a production setup with HTTPS
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React, TypeScript, Vite, Tailwind CSS, Recharts |
+| Backend | Python, FastAPI, Pandas, SciPy, SQLAlchemy |
+| Database | PostgreSQL 16 |
+| Infrastructure | Docker, Docker Compose, nginx, Caddy (HTTPS) |
 
 ```
 React frontend  →  FastAPI + Pandas  →  PostgreSQL
- (port 3000)         (port 8000)        (port 5433 on your machine)
 ```
 
-> The dataset is **fictional**, created by IBM data scientists for analytics practice. It does not represent a real workforce.
+## Analytical approach
 
----
+1. **What happened?** Overall rates and counts.
+2. **What patterns do we observe?** Group-level attrition rates across departments, roles, conditions and career stages.
+3. **What is associated with attrition?** Correlations and group comparisons.
+4. **What could HR investigate?** Recommendations tied to the findings.
 
-## Table of contents
-1. [What you need](#1-what-you-need)
-2. [Get the project](#2-get-the-project)
-3. [Download the dataset](#3-download-the-dataset)
-4. [Configure environment variables (optional)](#4-configure-environment-variables-optional)
-5. [Start the application](#5-start-the-application)
-6. [Open the dashboard](#6-open-the-dashboard)
-7. [Verify it works](#7-verify-it-works)
-8. [Dark theme and PDF export](#8-dark-theme-and-pdf-export)
-9. [Fill in the README findings](#9-fill-in-the-readme-findings-optional)
-10. [Stop, restart and reset](#10-stop-restart-and-reset)
-11. [Run without Docker (development mode)](#11-run-without-docker-development-mode)
-12. [Deploying PeoplePulse](#12-deploying-peoplepulse)
-13. [Troubleshooting](#13-troubleshooting)
-14. [Project structure](#14-project-structure)
-15. [Project background](#15-project-background)
+Key methodology choices:
 
----
+- **Cleaning without over-editing.** Missing values, duplicates, data types, numeric ranges, logical consistency (e.g. years in role ≤ years at company) and categories are checked. Valid data is left unchanged and issues are flagged. Constant columns (`EmployeeCount`, `Over18`, `StandardHours`) are dropped; grouped columns (age, tenure, distance, promotion, experience, income band) are derived and documented in the app.
+- **Rates, not just counts.** Attrition rate = employees who left ÷ employees in the group, always displayed with group size.
+- **Minimum group size of 20.** Smaller groups are flagged and excluded from rankings, insights and segments to avoid misleading percentages.
+- **Cautious wording.** An insight only says "higher" or "lower" when the gap is at least 2 percentage points and 1.2×; otherwise it reports "similar".
+- **Statistics.** Pearson r (point-biserial for a 0/1 outcome) and Spearman ρ with p-values for numeric variables; group-level rates for categorical variables.
+- **Segmentation.** Pairs of department, job role, overtime, job satisfaction, age group and tenure group with at least 20 employees and an attrition rate above overall.
 
-## 1. What you need
+> **Correlation is not causation.** Every statement describes an observed association in this dataset. For example, a higher attrition rate among
+> employees working overtime does not prove that overtime causes people to leave.
 
-| Tool | Why | Check it is installed |
-|---|---|---|
-| **Docker Desktop** (Windows/macOS) or **Docker Engine + Compose plugin** (Linux) | Runs the frontend, backend and database | `docker --version` and `docker compose version` |
-| **Git** (optional) | Only if you clone the repo instead of unzipping | `git --version` |
-| A free **Kaggle account** | To download the dataset | – |
+## Key findings
 
-You do **not** need Python, Node.js or PostgreSQL installed to run the project with Docker.
+<!-- FINDINGS:START -->
+**1,470 employees, 237 left → overall attrition rate 16.1%.**
 
-Make sure **Docker Desktop is open and running** (the whale icon should say "Docker Desktop is running") before continuing.
+| Department | Employees | Left | Attrition rate |
+|---|---:|---:|---:|
+| Sales | 446 | 92 | 20.6% |
+| Human Resources | 63 | 12 | 19.0% |
+| Research & Development | 961 | 133 | 13.8% |
 
-Free ports needed on your machine: **3000** (dashboard), **8000** (API), **5433** (database).
+| Job role | Employees | Left | Attrition rate |
+|---|---:|---:|---:|
+| Sales Representative | 83 | 33 | 39.8% |
+| Laboratory Technician | 259 | 62 | 23.9% |
+| Human Resources | 52 | 12 | 23.1% |
+| Sales Executive | 326 | 57 | 17.5% |
+| Research Scientist | 292 | 47 | 16.1% |
+| Manufacturing Director | 145 | 10 | 6.9% |
+| Healthcare Representative | 131 | 9 | 6.9% |
+| Manager | 102 | 5 | 4.9% |
+| Research Director | 80 | 2 | 2.5% |
 
-## 2. Get the project
+| Overtime | Employees | Left | Attrition rate |
+|---|---:|---:|---:|
+| Works overtime | 416 | 127 | 30.5% |
+| No overtime | 1,054 | 110 | 10.4% |
 
-**Option A – unzip:** extract `peoplepulse.zip` somewhere, e.g. `C:\Projects\peoplepulse` or `~/projects/peoplepulse`.
+**Key findings (generated by the app's insight engine):**
 
-**Option B – Git:**
-```bash
-git clone <your-repo-url> peoplepulse
-```
+- 237 of 1,470 employees (16.1%) left, while 1,233 remain.
+- Sales has the highest observed attrition among departments (20.6%, n=446) compared with 16.1% overall.
+- Job roles differ substantially: Sales Representative shows the highest observed attrition (39.8%, n=83) and Research Director the lowest (2.5%, n=80).
+- Employees working overtime show a higher observed attrition rate (30.5%, n=416) than employees who do not work overtime (10.4%, n=1054). This is an association and does not show that overtime causes attrition.
+- Employees reporting lower job satisfaction (1–2) show a higher observed attrition rate (19.7%, n=569) than those reporting higher satisfaction (3–4) (13.9%, n=901).
+- Employees reporting lower work-life balance (1–2) show a higher observed attrition rate (19.6%, n=424) than those reporting higher work-life balance (3–4) (14.7%, n=1046).
+- Employees reporting lower environment satisfaction (1–2) show a higher observed attrition rate (20.1%, n=571) than those reporting higher environment satisfaction (3–4) (13.6%, n=899).
+- Employees who left had a lower median monthly income ($3,202) compared with those who stayed ($5,204); mean income was $4,787 vs $6,833. Income overlaps with job level and tenure, so this does not show that pay alone drives attrition.
+- Employees with 0–2 years at the company show a higher observed attrition rate (29.8%, n=342) than employees with longer tenure (12.0%, n=1128).
+- Among time-since-last-promotion groups, 6–10 years shows the highest observed attrition (18.1%, n=149) versus 16.1% overall.
+- The Under 25 age group shows the highest observed attrition (39.2%, n=97) versus 16.1% overall.
+- Employees living 21+ km from work show a higher observed attrition rate (22.1%, n=204) than employees living closer (15.2%, n=1266). Higher observed attrition is associated with the longer-distance group; this does not show that distance is the cause.
+- Employees who travel frequently show a higher observed attrition rate (24.9%, n=277) than other employees (14.1%, n=1193).
 
-Then open a terminal (PowerShell, Terminal, or your editor's terminal) **inside the project folder**:
-```bash
-cd peoplepulse
-```
-You should see `docker-compose.yml` when you list the folder (`dir` on Windows, `ls` on macOS/Linux).
+**Highest-attrition segments (min. 20 employees):**
 
-## 3. Download the dataset
+| Segment | Employees | Attrition rate |
+|---|---:|---:|
+| Overtime + Age Under 25 | 31 | 67.7% |
+| Sales Representative + Overtime | 24 | 66.7% |
+| Sales Representative + Age Under 25 | 23 | 56.5% |
+| Sales + Age Under 25 | 27 | 51.9% |
+| Overtime + 0–2 years tenure | 104 | 51.0% |
 
-The dataset is not included in the repository.
+_All findings are observed associations, not proof of causation._
+<!-- FINDINGS:END -->
 
-1. Go to Kaggle and search for **"IBM HR Analytics Employee Attrition & Performance"**
-   (https://www.kaggle.com/datasets/pavansubhasht/ibm-hr-analytics-attrition-dataset).
-2. Sign in and click **Download**. Unzip the download.
-3. You will get a file named `WA_Fn-UseC_-HR-Employee-Attrition.csv`.
-4. Copy it into the project's `data/` folder and **rename it exactly** to:
+## API
 
-```
-data/employee_attrition.csv
-```
+A small FastAPI service exposes the analysis (interactive docs at `/docs`):
 
-Your folder should now look like this:
-```
-peoplepulse/
-└── data/
-    ├── README.md
-    └── employee_attrition.csv   ← the file you just added
-```
+`GET /api/dashboard · /attrition · /departments · /job-roles · /satisfaction · /compensation · /tenure · /insights · /employees · /filters`
 
-Quick check (optional): the file should have 1,471 lines (a header + 1,470 employees).
-```bash
-# macOS / Linux
-wc -l data/employee_attrition.csv
-# Windows PowerShell
-(Get-Content data\employee_attrition.csv).Count
-```
+All endpoints accept the dashboard filters as query parameters, e.g. `/api/attrition?department=Sales&overtime=Yes`.
 
-## 4. Configure environment variables (optional)
-
-The project works out of the box with default credentials. To use your own:
-
-```bash
-# macOS / Linux
-cp .env.example .env
-# Windows PowerShell
-copy .env.example .env
-```
-
-Then edit `.env`:
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `POSTGRES_USER` | `peoplepulse` | Database user |
-| `POSTGRES_PASSWORD` | `peoplepulse_dev` (the example file suggests `change_me`) | Database password – change it if you publish or share the project |
-| `POSTGRES_DB` | `peoplepulse` | Database name |
-| `RELOAD_ON_START` | `true` | Re-clean and reload the CSV into PostgreSQL every time the backend starts |
-
-The file also holds `DOMAIN` (only used for production, see [section 12](#12-deploying-peoplepulse)).
-
-`.env` is listed in `.gitignore`, so your credentials are never committed.
-
-> If you change the database user/password **after** the first run, reset the database volume (see [section 10](#10-stop-restart-and-reset)), because PostgreSQL only reads these values the first time it creates its data.
-
-## 5. Start the application
-
-From the project folder, run:
+## Quick start
 
 ```bash
+# 1. Save the Kaggle CSV as data/employee_attrition.csv
+# 2. Run everything (frontend + API + PostgreSQL)
 docker compose up --build
 ```
 
-What happens (the first run takes a few minutes while images download and build):
+Then open http://localhost:3000. For the full walkthrough – local development, environment variables, production deployment (VPS with HTTPS, or Render + Vercel) and troubleshooting – see the **[Setup & Deployment Guide](docs/SETUP.md)**.
 
-1. **db** – PostgreSQL 16 starts and becomes healthy.
-2. **backend** – installs Python packages, waits for the database, then **cleans the CSV with Pandas and loads it into the `employees` table**.
-3. **frontend** – builds the React app and serves it with nginx. It only starts after the backend reports healthy.
-
-Wait until you see log lines like these (exact wording may vary):
-```
-backend-1   | INFO:peoplepulse:Loaded 1470 employees into PostgreSQL
-backend-1   | INFO:     Uvicorn running on http://0.0.0.0:8000
-frontend-1  | ... ready for start up
-```
-
-Leave this terminal open – it shows the logs. To run in the background instead, use `docker compose up --build -d`.
-
-## 6. Open the dashboard
-
-| What | URL |
-|---|---|
-| **Dashboard** | http://localhost:3000 |
-| API documentation (Swagger) | http://localhost:8000/docs |
-| API health check | http://localhost:8000/health |
-
-## 7. Verify it works
-
-Work through this checklist:
-
-1. **Health check** – open http://localhost:8000/health. You should see `{"status":"ok","data_error":null}`.
-   If `data_error` has text, see [Troubleshooting](#13-troubleshooting).
-2. **KPI cards** – the dashboard should show about **1,470** total employees, **237** who left and an attrition rate of about **16.1%**.
-3. **Charts** – scroll through Overview, Work conditions, Compensation, Career, Employees and Relationships; every chart should render.
-4. **Filters** – pick *Overtime → Works overtime*; the KPIs and charts should update. Click **Reset Filters** to restore them.
-5. **Employee table** – scroll to *Employee data*, type a department or employee number in the search box, click a column header to sort, and use Previous/Next.
-6. **Data quality** – at the bottom you should see 1,470 records, 0 missing values and 0 duplicate records (35 columns in the original file).
-7. **API** – try http://localhost:8000/api/dashboard in the browser, or in a terminal:
-   ```bash
-   curl "http://localhost:8000/api/attrition?overtime=Yes"
-   ```
-8. **Database** (optional) – connect any SQL client (DBeaver, pgAdmin, `psql`) to host `localhost`, port **5433**, database/user `peoplepulse`, and run the queries in `scripts/queries.sql`.
-
-## 8. Dark theme and PDF export
-
-**Dark theme**
-1. Click the **sun / moon button** in the top-right of the header to switch between light and dark.
-2. The first visit follows your operating-system setting. After that your choice is remembered in your browser.
-3. The dark theme uses a soft slate-navy palette (not pure black) and all charts adapt to it.
-
-**Export the dashboard to PDF**
-1. (Optional) Set the filters you want first – the PDF contains exactly what is on screen, and the active filters are printed in the report header.
-2. Click **Export PDF** in the header. For about a second the page switches to a light, A4-width layout (a banner says "Preparing PDF…"). This happens even in dark mode so the PDF is print-friendly.
-3. The browser's print dialog opens. Set **Destination** to **Save as PDF**.
-4. If colours or chart backgrounds are missing, open **More settings** and tick **Background graphics**. Keep **Scale** at 100% (or Default) and **Margins** at Default.
-5. Click **Save**. The file name suggestion is `PeoplePulse-Attrition-Report-<date>`.
-6. The dashboard returns to your previous theme when the dialog closes.
-
-What the PDF contains: report title, date, active filters, KPI cards, every chart and insight, recommendations, segments and the data-quality summary. It leaves out navigation, filter controls and the interactive employee table. Pressing `Ctrl/Cmd + P` uses the same print styles. Chrome and Edge give the best results.
-
-## 9. Fill in the README findings (optional)
-
-The **Findings** section below is generated from your real data so it never contains made-up numbers.
-
-```bash
-pip install pandas numpy scipy
-python scripts/generate_findings.py            # prints the findings
-python scripts/generate_findings.py --write    # writes them into this README
-```
-
-You can also print the data-quality summary without starting Docker:
-```bash
-python scripts/data_quality_report.py data/employee_attrition.csv
-```
-
-## 10. Stop, restart and reset
-
-| Goal | Command |
-|---|---|
-| Stop (press in the logs terminal) | `Ctrl + C` |
-| Stop background containers, keep data | `docker compose down` |
-| Start again (no rebuild needed) | `docker compose up` |
-| Rebuild after changing code | `docker compose up --build` |
-| **Full reset** (also deletes the database volume) | `docker compose down -v` |
-| View logs of one service | `docker compose logs -f backend` |
-
-**Replaced the CSV?** Just restart (`docker compose restart backend`) – with `RELOAD_ON_START=true` the data is cleaned and reloaded automatically.
-
-## 11. Run without Docker (development mode)
-
-Use this if you want hot-reload while editing code. You need **Python 3.12+** and **Node.js 20+**.
-
-**Step 1 – start only the database in Docker**
-```bash
-docker compose up -d db
-```
-
-**Step 2 – run the backend** (new terminal)
-```bash
-cd backend
-python -m venv .venv
-
-# activate the virtual environment
-#   macOS/Linux:   source .venv/bin/activate
-#   Windows:       .venv\Scripts\Activate.ps1
-
-pip install -r requirements.txt
-```
-Set the environment variables, then start the server:
-```bash
-# macOS / Linux
-export POSTGRES_HOST=localhost POSTGRES_PORT=5433 DATA_PATH=../data/employee_attrition.csv
-# Windows PowerShell
-$env:POSTGRES_HOST="localhost"; $env:POSTGRES_PORT="5433"; $env:DATA_PATH="..\data\employee_attrition.csv"
-
-uvicorn app.main:app --reload
-```
-(Add `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB` too if you changed them in `.env`.)
-
-**Step 3 – run the frontend** (another terminal)
-```bash
-cd frontend
-npm install
-npm run dev
-```
-Open http://localhost:5173. The dev server proxies `/api` requests to the backend on port 8000.
-
-Optional type check: `npm run typecheck`.
-
-## 12. Deploying PeoplePulse
-
-PeoplePulse has three parts (frontend, API, PostgreSQL), so it needs a host that can run containers or a database.
-Pick **one** of the two options below.
-
-| | Option A – one server (VPS) | Option B – Render + Vercel |
-|---|---|---|
-| How | The same Docker Compose stack on a Linux server, with automatic HTTPS | API + PostgreSQL on Render, static frontend on Vercel |
-| Pros | Simple, identical to local, you control everything | No server maintenance, deploys on every `git push` |
-| Cons | You manage the server and updates | Free tiers can sleep or expire – check each provider's current limits |
-
-### 12.0 Before you deploy (both options)
-1. **The dataset must be available at build time.** The backend image bundles `data/employee_attrition.csv`, so the file has to be in the folder/repo you deploy from. Check the dataset's licence on Kaggle before pushing it to a *public* repository; use a private repo if unsure.
-   Confirm with `git ls-files data` – it should list `data/employee_attrition.csv`.
-2. **Never commit `.env`** (it is already in `.gitignore`).
-3. **There is no login.** That is fine for this fictional demo dataset. If you ever load real HR data, put authentication in front of the dashboard first.
-4. Test locally first: `docker compose up --build` must work (section 5).
-
-### Option A – Single server with Docker Compose and HTTPS
-
-Uses `docker-compose.prod.yml` and `Caddyfile`. Only ports 80/443 are exposed; the database and API stay on the internal Docker network, and Caddy gets a free HTTPS certificate automatically.
-
-**Step 1 – Create a server.** Any provider works (DigitalOcean, Hetzner, AWS Lightsail, Oracle Cloud, …). Choose Ubuntu 22.04 or 24.04 with at least 1 GB RAM (2 GB is more comfortable). Note its public IP address.
-
-**Step 2 – Point your domain at it.** At your domain registrar/DNS provider, create an **A record**: `dashboard.example.com` → your server's IP. Wait a few minutes for DNS to update (`ping dashboard.example.com` should show your IP).
-
-**Step 3 – Connect and install Docker.**
-```bash
-ssh root@YOUR_SERVER_IP          # or your user
-curl -fsSL https://get.docker.com | sh
-docker compose version           # should print a version
-```
-
-**Step 4 – Open the firewall** (allow SSH first, or you will lock yourself out):
-```bash
-ufw allow OpenSSH
-ufw allow 80
-ufw allow 443
-ufw enable
-```
-If your provider has its own cloud firewall, also allow TCP 22, 80 and 443 there.
-
-**Step 5 – Get the code onto the server.**
-```bash
-git clone <your-repo-url> peoplepulse
-cd peoplepulse
-```
-If the CSV is not in your repo, copy it from your computer instead (run this on **your computer**):
-```bash
-scp data/employee_attrition.csv root@YOUR_SERVER_IP:~/peoplepulse/data/
-```
-
-**Step 6 – Configure.**
-```bash
-cp .env.example .env
-nano .env
-```
-Set a **strong `POSTGRES_PASSWORD`** and set `DOMAIN=dashboard.example.com` (no `https://`, no trailing slash). Save with `Ctrl+O`, `Enter`, exit with `Ctrl+X`.
-
-**Step 7 – Start.**
-```bash
-docker compose -f docker-compose.prod.yml up -d --build
-```
-
-**Step 8 – Check.**
-```bash
-docker compose -f docker-compose.prod.yml ps          # all services "running" / "healthy"
-docker compose -f docker-compose.prod.yml logs -f caddy backend
-```
-Open `https://dashboard.example.com`. The first load may take a minute while the certificate is issued. Also check `https://dashboard.example.com/api/dashboard`.
-
-**Updating later**
-```bash
-cd peoplepulse
-git pull
-docker compose -f docker-compose.prod.yml up -d --build
-```
-
-**Backup (optional).** The data can always be rebuilt from the CSV, but to dump the database:
-```bash
-docker compose -f docker-compose.prod.yml exec db pg_dump -U peoplepulse peoplepulse > backup.sql
-```
-
-### Option B – Render (API + PostgreSQL) and Vercel (frontend)
-
-Menu names on these sites change occasionally; the idea stays the same.
-
-**Step 1 – Push the project to GitHub** (including `data/employee_attrition.csv`, see 12.0).
-
-**Step 2 – Create the database on Render.**
-1. Render dashboard → **New +** → **PostgreSQL**.
-2. Give it a name, choose a **region** (use the same region for the API), pick a plan, **Create Database**.
-3. When it is ready, copy the **Internal Database URL** from its page.
-
-**Step 3 – Create the API on Render.**
-1. **New +** → **Web Service** → connect your GitHub repository.
-2. Set **Language / Runtime** to **Docker**.
-3. **Dockerfile Path:** `./backend/Dockerfile`. Leave the **Docker build context / root directory** as the repository root (it must be the root so the `data/` folder is included).
-4. Same region as the database.
-5. Add **Environment Variables**:
-
-   | Key | Value |
-   |---|---|
-   | `DATABASE_URL` | the Internal Database URL from Step 2 |
-   | `RELOAD_ON_START` | `true` |
-   | `CORS_ORIGINS` | `*` for now (you will lock it down in Step 5) |
-
-6. Set **Health Check Path** to `/health`, then **Create Web Service**.
-7. When the deploy finishes, open `https://<your-service>.onrender.com/health` – you should see `{"status":"ok","data_error":null}` – and `https://<your-service>.onrender.com/api/dashboard` should return the KPIs. Copy the service URL.
-
-**Step 4 – Deploy the frontend on Vercel.**
-1. Vercel → **Add New… → Project** → import the same GitHub repository.
-2. Set **Root Directory** to `frontend`. The framework preset should be detected as **Vite** (build command `npm run build`, output directory `dist`).
-3. Under **Environment Variables** add `VITE_API_URL` = your Render service URL, e.g. `https://peoplepulse-api.onrender.com` (**no trailing slash and no `/api`**).
-4. **Deploy**, then open the Vercel URL.
-
-**Step 5 – Lock down CORS.** In the Render service → **Environment**, change `CORS_ORIGINS` to your Vercel URL, e.g. `https://peoplepulse.vercel.app` (add a custom domain too if you have one, separated by a comma). Save – Render redeploys.
-
-**Step 6 – Test.** Open the Vercel URL, check the KPI cards, try a filter, switch the theme and export a PDF.
-
-**Updating later:** push to your main branch – both Render and Vercel redeploy automatically.
-
-**Good to know**
-- On free plans the API may "sleep" when idle, so the first request after a pause can take a while and the dashboard may briefly show a loading/error state. Free-tier limits (including how long a free database lasts) change – check each provider's pricing page.
-- The same pattern works on other hosts (Railway, Fly.io, Koyeb, Netlify, …): run `backend/Dockerfile` with `DATABASE_URL` + `CORS_ORIGINS`, and host the built `frontend/` anywhere static with `VITE_API_URL` set.
-- `VITE_API_URL` is baked in at **build time** – after changing it, redeploy the frontend.
-
-### Environment variable reference
-
-| Variable | Used by | Purpose |
-|---|---|---|
-| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | db, backend (Compose) | Database credentials |
-| `POSTGRES_HOST`, `POSTGRES_PORT` | backend | Set by Compose (`db`, `5432`); override for local dev |
-| `DATABASE_URL` | backend | Full connection string (managed databases). If set it replaces the `POSTGRES_*` values |
-| `DATA_PATH` | backend | CSV location (default `/app/data/employee_attrition.csv`; Compose mounts `./data` at `/data`) |
-| `RELOAD_ON_START` | backend | `true` = clean and reload the CSV on every start |
-| `CORS_ORIGINS` | backend | Comma-separated allowed browser origins (`*` = any) |
-| `PORT` | backend | Injected by hosts such as Render (default 8000) |
-| `DOMAIN` | Caddy / prod compose | Public domain for HTTPS |
-| `VITE_API_URL` | frontend (build time) | API base URL when it is on a different domain; empty = same origin |
-
-## 13. Troubleshooting
-
-| Problem | Cause and fix |
-|---|---|
-| `Cannot connect to the Docker daemon` / `docker: command not found` | Docker Desktop is not running or not installed. Start it and wait until it says it is running. |
-| Dashboard shows **"Could not load data. Dataset not found at /data/employee_attrition.csv…"** | The CSV is missing or misnamed. Check it is exactly `data/employee_attrition.csv`, then `docker compose restart backend`. |
-| `Missing required columns: …` in backend logs | The CSV does not match the IBM schema (e.g. wrong file or edited headers). Re-download the original file. |
-| `port is already allocated` / `address already in use` | Another program uses port 3000, 8000 or 5433. Stop it, or change the left-hand number in `docker-compose.yml`, e.g. `"3001:80"`. |
-| Frontend container never starts | It waits for the backend health check. Run `docker compose logs backend` to see the real error. |
-| `password authentication failed for user` | You changed credentials after the database was created. Run `docker compose down -v` and start again. |
-| Dashboard shows old numbers after replacing the CSV | Ensure `RELOAD_ON_START=true`, then `docker compose restart backend`. |
-| Blank page or an old version of the dashboard | Hard refresh (`Ctrl+Shift+R`), or rebuild with `docker compose up --build`. |
-| Build fails during `npm install` or `pip install` | Usually a network problem. Check your internet connection and retry. |
-| Browser console: **CORS error** after deploying | `CORS_ORIGINS` must exactly match the page's origin, including `https://` and with no trailing slash. Update it and redeploy the API. |
-| Deployed dashboard says **Failed to fetch** / calls the wrong URL | `VITE_API_URL` is missing or wrong (no trailing slash, no `/api`). It is applied at build time, so redeploy the frontend after fixing it. |
-| Render logs: `Dataset not found at /app/data/employee_attrition.csv` | The CSV was not in the repository/build. Commit it (`git ls-files data`) and redeploy. |
-| Render: build fails to find `backend/Dockerfile` or `data` | Dockerfile path must be `./backend/Dockerfile` and the build context the repository **root**. |
-| VPS: HTTPS certificate is not issued | DNS A record not pointing at the server yet, or ports 80/443 blocked by the firewall. Check `docker compose -f docker-compose.prod.yml logs caddy`. |
-| `Set POSTGRES_PASSWORD in .env` / `Set DOMAIN in .env` when starting the prod stack | Create `.env` from `.env.example` and fill in those values. |
-| PDF export has no colours or looks cut off | In the print dialog tick **Background graphics**, keep scale at 100%, and use Chrome/Edge. |
-| Windows: slow or failing builds | Make sure Docker Desktop uses the WSL 2 backend and the project is not inside a restricted/synced folder. |
-
-Still stuck? Run `docker compose logs` and read the last error lines of each service.
-
-## 14. Project structure
+## Project structure
 
 ```
 peoplepulse/
-├── frontend/                 React + TypeScript + Vite + Tailwind + Recharts (served by nginx)
-│   └── src/  components/  charts/  pages/  services/   (theme.tsx = dark mode + PDF export)
-├── backend/                  FastAPI + Pandas
-│   └── app/
-│       ├── main.py           app startup (waits for DB, loads data)
-│       ├── api/              routes, filters → SQL WHERE clauses
-│       ├── analytics/        cleaning, metrics, insights, segments
-│       └── database/         connection and CSV → PostgreSQL loader
-├── data/                     employee_attrition.csv (you add this)
-├── scripts/                  queries.sql, data_quality_report.py, generate_findings.py
-├── docker-compose.yml        local stack
-├── docker-compose.prod.yml   production stack for a VPS (with HTTPS)
-├── Caddyfile                 reverse proxy / automatic HTTPS
-├── .env.example
+├── frontend/          React + TypeScript dashboard (components, charts, pages, services)
+├── backend/app/       FastAPI app: api/ (routes, filters), analytics/ (cleaning, metrics, insights), database/ (loader)
+├── data/              employee_attrition.csv (from Kaggle)
+├── scripts/           SQL examples, data-quality report, findings generator
+├── docs/SETUP.md      setup, run and deployment guide
+├── docker-compose.yml / docker-compose.prod.yml / Caddyfile
 └── README.md
 ```
 
-**API endpoints:** `GET /api/dashboard · /attrition · /departments · /job-roles · /satisfaction · /compensation · /tenure · /insights · /employees · /filters`.
-Filters are query parameters: `department, job_role, gender, overtime, business_travel, education, job_satisfaction, work_life_balance, age_group, tenure_group`
-(e.g. `/api/attrition?department=Sales&overtime=Yes`).
+## Limitations
 
-## 15. Project background
+- The dataset is a single, fictional snapshot: there is no time dimension, so trends and "time to leave" cannot be analysed.
+- Observational associations only – no causal claims, and no control for confounding beyond what the filters allow.
+- Some groups are small; they are marked in the charts and excluded from rankings.
+- The dashboard has no authentication. It is intended for fictional demo data; add access control before using real HR data.
 
-**Business problem.** Attrition is costly (recruiting, onboarding, lost knowledge) and can signal workload, career-development or management issues. HR needs to know how much attrition there is, where it concentrates and what is associated with it.
+## Future improvements
 
-**Questions investigated.** Overall rate; departments and roles; income and job level; overtime; work-life balance; job and environment satisfaction; tenure; time since promotion; time in role; work history; age; business travel; distance from home; most affected groups.
-
-**Tech stack.** React, TypeScript, Vite, Tailwind CSS, Recharts · Python, FastAPI, Pandas, SciPy · PostgreSQL 16 · Docker Compose.
-
-**Analytics methodology.**
-- *Cleaning:* checks missing values, duplicates, types, ranges, logical consistency and categories. Valid data is not altered; issues are flagged. Constant columns (`EmployeeCount`, `Over18`, `StandardHours`) are dropped; column names become snake_case; `attrition_flag` and grouped columns (age, tenure, distance, promotion, experience, income band) are added. All steps are shown in the *Data quality* section.
-- *Attrition rate* = employees who left ÷ employees in the group, always shown with group size. Groups with **fewer than 20 employees** are flagged and excluded from rankings, insights and segments.
-- *Groups:* age (Under 25, 25–34, 35–44, 45–54, 55+); tenure (0–2, 3–5, 6–10, 11–20, 21+ years); distance (0–5, 6–10, 11–20, 21+ km); years since promotion (0–2, 3–5, 6–10, 11+).
-- *Numeric relationships:* Pearson r (point-biserial for a 0/1 outcome) and Spearman ρ with p-values. Categorical variables are compared with group-level attrition rates.
-- *Insights* only say "higher" or "lower" when the gap is at least 2 percentage points and 1.2×; otherwise "similar". *Recommendations* appear only for elevated findings and cite the finding they rely on.
-- *Segmentation:* pairs of Department, Job role, Overtime, Job satisfaction, Age group and Tenure group with at least 20 employees and a rate above overall.
-
-> **Correlation is not causation.** Every statement describes an observed association in this dataset, not a proven cause.
-
-### Findings
-<!-- FINDINGS:START -->
-_Not generated yet. After adding the CSV, run `python scripts/generate_findings.py --write` (see section 9) to fill this section with the real results._
-<!-- FINDINGS:END -->
-
-### Recommendations
-The dashboard's **HR Recommendations** panel derives suggestions from the calculated findings (e.g. review workload and overtime patterns where overtime shows higher observed attrition; investigate early-tenure retention where short tenure shows higher attrition). They are starting points for investigation, not predictions of impact.
-
-### Future improvements
-- Attrition prediction (after the descriptive analysis is trusted)
-- Employee segmentation (clustering)
+- Attrition prediction (after the descriptive analysis is validated)
+- Clustering-based employee segmentation
 - Time-based HR data (trends, cohorts, survival analysis)
 - Cost-of-attrition analysis
-- Optional CSV upload with schema validation
+- CSV upload with schema validation
+
+## Author
+
+**Ryan Nabo** – [@ryandcoder](https://github.com/ryandcoder)
+
+## Acknowledgements
+
+- **Pavan Subhash** and **Kaggle** for hosting the dataset, and the **IBM data scientists** who created it.
+- The open-source projects this app is built on: React, Vite, Tailwind CSS, Recharts, FastAPI, Pandas, SciPy, SQLAlchemy, PostgreSQL, Docker, nginx and Caddy.
